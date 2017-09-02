@@ -269,7 +269,7 @@ case ${bbDeclare[1]} in
   local -i bbNum=1
   local bbKey bbCurr bbMax=0 bbCurrKey bbMaxK=0
 
-  # max (in chars) value and kay
+  # max chars: value and kay
   for bbKey in "${!bbArrayRef[@]}"; do
     bbCurr=${#bbArrayRef[$bbKey]}
     bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
@@ -321,14 +321,14 @@ case ${bbDeclare[1]} in
 #=========================================================================
 # remaining attributes
  *[linuxcrt]*) printf "\e[2m%s\e[0m\n" " Attr:";;&
-  *i*) printf '    %s\n' "-i (integer)"      ;;&
-  *r*) printf '    %s\n' "-r (readonly)"     ;;&
-  *x*) printf '    %s\n' "-x (export)"       ;;&
-  *l*) printf '    %s\n' "-l (lowercasing)"  ;;&
-  *c*) printf '    %s\n' "-c (capitalizing)\n" ;;&
-  *u*) printf '    %s\n' "-u (uppercasing)\n"  ;;&
-  *n*) printf '    %s\n' "-n (reference)\n"    ;;&
-  *t*) printf '    %s\n' "-t (trace)\n"        ;;&
+  *i*) printf '    %s\n' "-i (integer)"        ;;&
+  *r*) printf '    %s\n' "-r (readonly)"       ;;&
+  *x*) printf '    %s\n' "-x (export)"         ;;&
+  *l*) printf '    %s\n' "-l (lowercasing)"    ;;&
+  *c*) printf '    %s\n' "-c (capitalizing)" ;;&
+  *u*) printf '    %s\n' "-u (uppercasing)"  ;;&
+  *n*) printf '    %s\n' "-n (reference)"    ;;&
+  *t*) printf '    %s\n' "-t (trace)"        ;;&
   *[linuxcrt]*) printf "\n";;
 esac
 printf "\n"
@@ -336,8 +336,7 @@ printf "\n"
 done # end list opernads
 
 return 0
-}
-# end function
+} # end function
 
 
 if [[ "$0" == "$BASH_SOURCE" ]]; then
