@@ -76,14 +76,6 @@ typeof() {
  local bbnfo="$bbapp v.0.1.11"
  local usage="USAGE: $bbapp [-t] NAME ..."
 
-#                                                                 PRECHECK
-#-------------------------------------------------------------------------
- if (($#==0)); then
-    printf "\e[2m%s: %s\e[0m\n" "$bbapp" "Positional parameter empty" >&2
-    printf "%s\n" "$usage" >&2
-    return 2
- fi
-
 #                                                                     HELP
 #-------------------------------------------------------------------------
  [[ $1 =~ ^(-u|--usage)$ ]] && { printf "%s\n" "$usage"; return 0; }
@@ -131,10 +123,10 @@ typeof() {
 
 #                                                                  OPTIONS
 #=========================================================================
-local bbIn=""       # input param
-local bbType=0      # Type flag: 0=extensive 1=single word output
+ local bbIn=""       # input param
+ local bbType=0      # Type flag: 0=extensive 1=single word output
 
-while (( $# > 0 )); do
+ while (( $# > 0 )); do
   case $1 in
 
     -t|--type) bbType=1; shift;;
@@ -164,14 +156,14 @@ while (( $# > 0 )); do
 
     *) bbIn+="$1 "; shift;;
   esac
-done
+ done
 
-# defaults
-bbIn="${bbIn% }"
+ # defaults
+ bbIn="${bbIn% }"
 
-# return operands to $@
-eval set -- "$bbIn"
-bbIn=""
+ # return operands to $@
+ eval set -- "$bbIn"
+ bbIn=""
 
 #                                                               START LOOP
 #=========================================================================
@@ -183,8 +175,7 @@ for bbIn; do
 # As a convenience, first check NAME with bash's `type -t` builtin.
 # This will type NAME as: alias, keyword, function, builtin, file.
 # If `type` does return something, print it.
-local bbDeclare
-bbDeclare="$(type -t "$bbIn" 2>/dev/null)"
+local bbDeclare="$(type -t "$bbIn" 2>/dev/null)"
 
 if [[ -n "$bbDeclare" ]]; then
     if (( bbType == 1 )); then
@@ -202,10 +193,10 @@ else
   # is not enabled, all non-set variables are in fact treated as undefined
   # variables when referenced - variables with null value. Of course, they
   # are not in symbols table, so check there to identify them.
-  # Return `unset' if they are not there.
+  # Return `unset' if they are not in in symbols table.
 
-  # assign `decalare -p NAME' to bbDeclare.
-  # If assignment is empty then NAME is unset (non-set) variable.
+  # Assign `decalare -p NAME' to bbDeclare,
+  # If assignment is empty then NAME is unset/nothing.
   if ! bbDeclare="$(declare -p "$bbIn" 2>/dev/null)"; then
     if (( bbType == 1 )); then
       printf "%s\n" "unset"
@@ -222,10 +213,10 @@ fi
 # At this point NAME is set (but might be null) variable:
 # whether scalar or array, it is in symbols table nonetheless.
 bbDeclare=( $bbDeclare )
-## Scrutinize attributes
-# Possible attributes for var:
-#  a) type attributes    (-aA): var OR indexed OR assoc. array.
-#  b) casing attributes  (ulc): uppercase, lowercase, title-case.
+
+## Scrutinize attributes. Possible attributes:
+#  a) var type attributes (-aA): scalar (-) OR indexed (a) OR assoc. array (A).
+#  b) letter-casing attributes (ulc): uppercase, lowercase, title-case.
 #  c) other attributes (inxrt): integer, ref, export, readonly, trace.
 
 # get nr. of terminal columns
@@ -244,7 +235,7 @@ case ${bbDeclare[1]} in
   local -i bbNum=1
   local bbMax=0
 
-  # max (in chars) value
+  # max chars
   for bbKey in "${!bbArrayRef[@]}"; do
     bbCurr=${#bbArrayRef[$bbKey]}
     bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
@@ -342,13 +333,12 @@ case ${bbDeclare[1]} in
 esac
 printf "\n"
 
-
 done # end list opernads
-
 
 return 0
 }
 # end function
+
 
 if [[ "$0" == "$BASH_SOURCE" ]]; then
   # if this file is executed
@@ -360,4 +350,4 @@ else
 fi
 
 # bash completions
-complete -v -A arrayvar typeof
+complete -v typeof
