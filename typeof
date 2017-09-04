@@ -10,21 +10,22 @@
 #                                                                  DETAILS
 #-------------------------------------------------------------------------
 #  NAME:
-#       typeof - variables (names) typing and dumping
+#       typeof - variable typing and dumping
 #
 #  SYNOPSIS:
 #       typeof [-t] NAME ...
 #
 #  DESCRIPTION:
-#       Started as a function mostly used to pretty dump array to the
-#       screen, became a function to type and qualify names passed to
-#       it. Still, when used with variables gives info about them, such
-#       as their value and attributes. Variable are passed by name (no $).
+#       This utility will try to qualify the arguments, to see if they
+#       hold any meaning to the shell; whether they are scalar variables
+#       or arrays, aliases, function names or shell keywords, etc. It is
+#       mostly ment to pretty print variables: their type, value and
+#       attributes. Variable names should be passed by name only (no $).
 #
 #       With -t option, only the type, as a single word is returned.
-#       Types returned are: unset variable, variable, indexed array,
-#       associative array; also the types returned by `type` builin:
-#       alias, keyword, function, builtin or file.
+#       Types returned are: unset, scalar, indexed, associative.
+#       Also, types returned by bash's `type` builtin are returned as:
+#       alias, keyword, function, builtin, file.
 #
 #  OPTIONS:
 #       -t, --type
@@ -32,7 +33,7 @@
 #
 #  OPERANDS:
 #       NAME <string>
-#           A name, an identifier, etc.
+#           A word, a name, an identifier, a token, etc.
 #                                                                   OUTPUT
 #-------------------------------------------------------------------------
 #  STDOUT:
@@ -58,9 +59,9 @@
 #       type (builtin)
 #
 #  NOTES:
-#       Best used when sourced. It can be executed as well, but in
-#       that case it will run in its own, separate, environment, so
-#       current environment varables won't be available unless exported.
+#       Best used when sourced. It can be executed as well, but than it
+#       will run in its own, separate environment, so current shell
+#       varables won't be available (unless exported).
 #
 #  EXAMPLES:
 #       typeof BASH_VERSINFO                # dumps array BASH_VERSINFO
@@ -165,24 +166,43 @@ typeof() {
  eval set -- "$bbIn"
  bbIn=""
 
+ # default format for printf
+ bbDim=" \e[2m%s\e[0m %s\n"
+
+
+
 #                                                               START LOOP
 #=========================================================================
-# list opernads
+# start the operanads loop
 for bbIn; do
 
 #                                                             TYPE BUILTIN
 #=========================================================================
-# As a convenience, first check NAME with bash's `type -t` builtin.
-# This will type NAME as: alias, keyword, function, builtin, file.
-# If `type` does return something, print it.
+# First, check what bash's builtin `type` says. It could qualify NAME as:
+# 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
 local bbDeclare="$(type -t "$bbIn" 2>/dev/null)"
 
 if [[ -n "$bbDeclare" ]]; then
-    if (( bbType == 1 )); then
+    if (( bbType == 1 ))
+    then
+      # if `-t or --type` is used, print the findings as a single word:
+      # 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
       printf "%s\n" "$bbDeclare"
     else
-      printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
-      printf " \e[2m%s\e[0m %s\n" "Type:" "$bbDeclare"
+      # oterwise, print more verbose, and styled, results
+      printf "$bbDim" "Name:" "$bbIn"
+      printf "$bbDim" "Type:" "$bbDeclare"
+
+      # In case it's a function, get the path used to source it -
+      # that can be done by turning on bash's extended_debug mode.
+      if [[ $bbDeclare == "function" ]]; then
+        shopt -s extdebug
+        local fPath="$(declare -F "$bbIn")"
+        fPath=( $fPath )
+        printf "$bbDim" "From:" "${fPath[2]} (line: ${fPath[1]})"
+        shopt -u extdebug
+      fi
+
     fi
 
 else
