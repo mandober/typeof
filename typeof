@@ -10,63 +10,69 @@
 #                                                                  DETAILS
 #-------------------------------------------------------------------------
 #  NAME:
-#       typeof - variable typing and dumping
+#       typeof - qualify input, type and dump variable.
 #
 #  SYNOPSIS:
-#       typeof [-t] NAME ...
+#       typeof [-t] NAME
 #
 #  DESCRIPTION:
-#       This utility will try to qualify the arguments, to see if they
-#       hold any meaning to the shell; whether they are scalar variables
-#       or arrays, aliases, function names or shell keywords, etc. It is
-#       mostly ment to pretty print variables: their type, value and
-#       attributes. Variable names should be passed by name only (no $).
-#
-#       With -t option, only the type, as a single word is returned.
-#       Types returned are: unset, scalar, indexed, associative.
-#       Also, types returned by bash's `type` builtin are returned as:
-#       alias, keyword, function, builtin, file.
+#       This utility will qualify the operand NAME as:
+#         - scalar (scalar variable)
+#         - indexed (indexed array)
+#         - associative (associative array)
+#         - unset (if NAME is not a set var or not a meaningful name)
+#         - function
+#         - file
+#         - builtin
+#         - alias
+#         - keyword
+#       It is particulary useful for pretty printing arrays: their type,
+#       value and attributes. Variable names should be supplied by name
+#       only (without $).
 #
 #  OPTIONS:
 #       -t, --type
-#           Return the type, as single word.
+#       Return the type, as single word.
 #
-#  OPERANDS:
-#       NAME <string>
-#           A word, a name, an identifier, a token, etc.
+#  OPERAND:
+#       NAME
+#       A word, a name, an identifier, a token, etc.
 #                                                                   OUTPUT
 #-------------------------------------------------------------------------
 #  STDOUT:
 #       Type, value and attributes of the parameter.
-#       With -t option prints type as a single word.
+#       With -t option prints type only as a single word.
 #
 #  STDERR:
-#       Error messages. Help and usage, on some errors.
+#       Error messages, help and usage.
 #
 #  ENVIRONMENT:
-#       This function does not influence environment variables.
+#       XTYPEOF variable will be set in the environment; it is associative
+#       array containg results of this function. It will have a "name" key
+#       containg supplied NAME, "type" key that will contain the recognized
+#       type; if type is 'file' or 'function', there will also be a "path"
+#       key, which in might contain one or more, colon-separated paths, to
+#       that particular file or function.
 #
 #  RETURN CODE:
 #       0  success
 #       1  failure
-#       2  empty parameter
 #                                                                     INFO
 #-------------------------------------------------------------------------
-#  DEPENDENCIES:
-#       none
-#
-#  SEE ALSO:
-#       type (builtin)
-#
 #  NOTES:
 #       Best used when sourced. It can be executed as well, but than it
 #       will run in its own, separate environment, so current shell
 #       varables won't be available (unless exported).
 #
 #  EXAMPLES:
-#       typeof BASH_VERSINFO                # dumps array BASH_VERSINFO
-#       typeof -t BASH_ALIASES              # outputs: `associative'
-#       typeof PATH SHELLOPTS BASHOPTS LS_COLORS
+#       typeof BASH_VERSINFO       # pretty prints the array
+#       typeof -t BASH_VERSINFO    # outputs: "associative"
+#
+#  DEPENDENCIES:
+#       none (bash only)
+#
+#  SEE ALSO:
+#       type (bash builtin)
 #
 #=========================================================================
 typeof() {
@@ -119,71 +125,47 @@ typeof() {
  shopt -s extquote        # Enables $'' and $"" quoting
  shopt -u nocasematch     # regexp case-sensitivity
  set -o noglob            # Disable globbing (set -f).
- trap "set +o noglob" RETURN ERR SIGHUP SIGINT SIGTERM
+ trap "set +o noglob" RETURN ERR SIGHUP SIGINT SIGTERM # Enable globbing
 
 
 #                                                                  OPTIONS
 #=========================================================================
- local bbIn=""       # input param
- local bbType=0      # Type flag: 0=extensive 1=single word output
+ local bbIn=""       # input parameter
+ local bbQuiet=0     # output verbosity: 0=verbose, 1=single word
 
- while (( $# > 0 )); do
+ # parse input args
+ while (($# > 0)); do
   case $1 in
-
-    -t|--type) bbType=1; shift;;
-
-    --) shift; bbIn+="$@"; set --;;
-
-    -*)
-        # test getopt version
-        getopt -T
-        (($? != 4)) && {
-          cat <<-EOFF >&2
-					Your version of getopt cannot be used to normalize the suplied
-					options. Please try again, but supply normalized options: without
-					compounded short options and/or abbreviated long options.
-					EOFF
-          return 7
-        }
-
-        local bbGetopt=$(getopt -quo -v:t -l verbose:,type -- "$@")
-        # echo "\"$bbGetopt\""
-        bbGetopt="${bbGetopt# }"
-        bbGetopt="${bbGetopt// -- / }"
-        bbGetopt="${bbGetopt/% --/}"
-        # echo "\"$bbGetopt\""
-        eval set -- "$bbGetopt"
-    ;;
-
-    *) bbIn+="$1 "; shift;;
+    -t|--type) bbQuiet=1; shift;;
+            *) bbIn="$1"; shift;;
   esac
  done
 
- # defaults
- bbIn="${bbIn% }"
-
- # return operands to $@
- eval set -- "$bbIn"
- bbIn=""
-
  # default format for printf
  bbDim=" \e[2m%s\e[0m %s\n"
+ bbDim1="\e[2m%s\e[0m\n"
 
 
-
-#                                                               START LOOP
+#                                                                 ALL VARS
 #=========================================================================
-# start the operanads loop
-for bbIn; do
+ # If no arg supplied print all variables
+ if [[ -z $bbIn ]]; then
+  printf "$bbDim1" "Variables:"
+  compgen -v | column -c $(tput cols)
+  printf "$bbDim1" "Functions:"
+  compgen -A function | column -c $(tput cols)
+  return 0
+ fi
+
 
 #                                                             TYPE BUILTIN
 #=========================================================================
-# First, check what bash's builtin `type` says. It could qualify NAME as:
+# First, check arg with `type` - it can qualify a NAME as:
 # 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
 local bbDeclare="$(type -t "$bbIn" 2>/dev/null)"
 
 if [[ -n "$bbDeclare" ]]; then
-    if (( bbType == 1 ))
+    if (( bbQuiet == 1 ))
     then
       # if `-t or --type` is used, print the findings as a single word:
       # 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
@@ -193,6 +175,8 @@ if [[ -n "$bbDeclare" ]]; then
       printf "$bbDim" "Name:" "$bbIn"
       printf "$bbDim" "Type:" "$bbDeclare"
 
+      #                                                   FUNCTION
+      #-----------------------------------------------------------
       # In case it's a function, get the path used to source it -
       # that can be done by turning on bash's extended_debug mode.
       if [[ $bbDeclare == "function" ]]; then
@@ -201,6 +185,24 @@ if [[ -n "$bbDeclare" ]]; then
         fPath=( $fPath )
         printf "$bbDim" "From:" "${fPath[2]} (line: ${fPath[1]})"
         shopt -u extdebug
+      fi
+
+      #                                                       FILE
+      #-----------------------------------------------------------
+      # In case it's a file, get its path
+      if [[ $bbDeclare == "file" ]]; then
+        local fPath="$(which -a "$bbIn")"
+        fPath=${fPath//$'\n'/:}
+        printf "$bbDim" "Path:" "$fPath"
+        declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
+      fi
+
+      #                                                    BUILTIN
+      #-----------------------------------------------------------
+      # If running interactively, display all builtins, hilite this one
+      if [[ $bbDeclare == "builtin" ]] && [[ $- =~ i ]]; then
+        printf " \e[2m%s\e[0m" "Builtins: "
+        compgen -b | tr '\n' ' ' | grep -E "\b$bbIn\b"
       fi
 
     fi
@@ -218,7 +220,7 @@ else
   # Assign `decalare -p NAME' to bbDeclare,
   # If assignment is empty then NAME is unset/nothing.
   if ! bbDeclare="$(declare -p "$bbIn" 2>/dev/null)"; then
-    if (( bbType == 1 )); then
+    if (( bbQuiet == 1 )); then
       printf "%s\n" "unset"
     else
       printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
@@ -248,7 +250,7 @@ case ${bbDeclare[1]} in
 #                                                            INDEXED ARRAY
 #=========================================================================
  *a*)
-  (( bbType <= 1 )) && { printf "%s\n" "indexed"; continue; }
+  (( bbQuiet <= 1 )) && { printf "%s\n" "indexed"; continue; }
 
   local bbKey bbCurr
   local -n bbArrayRef="$bbIn"
@@ -283,7 +285,7 @@ case ${bbDeclare[1]} in
 #                                                        ASSOCIATIVE ARRAY
 #=========================================================================
  *A*)
-  (( bbType == 1 )) && { printf "%s\n" "associative"; continue; }
+  (( bbQuiet == 1 )) && { printf "%s\n" "associative"; continue; }
 
   local -n bbArrayRef="$bbIn"
   local -i bbNum=1
@@ -322,7 +324,7 @@ case ${bbDeclare[1]} in
 # if 1. attribute was (-) than var is scalar
  -[-linuxcrt]*)
     # if --type, output single word type
-    (( bbType == 1 )) && { printf "%s\n" "scalar"; continue; }
+    (( bbQuiet == 1 )) && { printf "%s\n" "scalar"; continue; }
 
     # otherwise output name, type and value
     local bbValue="${!bbIn}"
@@ -353,7 +355,7 @@ case ${bbDeclare[1]} in
 esac
 printf "\n"
 
-done # end list opernads
+# done # end opernads loop
 
 return 0
 } # end function
@@ -366,7 +368,9 @@ if [[ "$0" == "$BASH_SOURCE" ]]; then
 else
   # if this file is sourced
   echo "typeof sourced"
+  # alias
+  alias t=typeof
 fi
 
-# bash completions
+# bash completions: complete with variable names (-v)
 complete -v typeof
