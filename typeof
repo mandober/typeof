@@ -13,7 +13,7 @@
 #       typeof - qualify input, type and dump variable.
 #
 #  SYNOPSIS:
-#       typeof [-t] NAME
+#       typeof [-b|--brief] NAME
 #
 #  DESCRIPTION:
 #       This utility will qualify the operand NAME as:
@@ -31,7 +31,7 @@
 #       only (without $).
 #
 #  OPTIONS:
-#       -t, --type
+#       -b, --brief
 #       Return the type, as single word.
 #
 #  OPERAND:
@@ -41,7 +41,6 @@
 #-------------------------------------------------------------------------
 #  STDOUT:
 #       Type, value and attributes of the parameter.
-#       With -t option prints type only as a single word.
 #
 #  STDERR:
 #       Error messages, help and usage.
@@ -57,6 +56,7 @@
 #  RETURN CODE:
 #       0  success
 #       1  failure
+#       2  NAME has no meaning
 #                                                                     INFO
 #-------------------------------------------------------------------------
 #  NOTES:
@@ -66,7 +66,7 @@
 #
 #  EXAMPLES:
 #       typeof BASH_VERSINFO       # pretty prints the array
-#       typeof -t BASH_VERSINFO    # outputs: "associative"
+#       typeof -b BASH_VERSINFO    # outputs: "associative"
 #
 #  DEPENDENCIES:
 #       none (bash only)
@@ -81,7 +81,7 @@ typeof() {
 #-------------------------------------------------------------------------
  local bbapp="${FUNCNAME[0]}"
  local bbnfo="$bbapp v.0.1.11"
- local usage="USAGE: $bbapp [-t] NAME ..."
+ local usage="USAGE: $bbapp [-b] NAME ..."
 
 #                                                                     HELP
 #-------------------------------------------------------------------------
@@ -96,25 +96,23 @@ typeof() {
 	DESCRIPTION:
 	  Pass an identifier (without \$), name or word NAME to
 	  check its type and dump its value and attributes.
-	  With -t option, only the type, as a single word, is
+	  With -b option, only the type, as a single word, is
 	  returned. Returned types are:
-	   - 'unset' - for unset variables
-	   - 'associative' - for associative arrays
-	   - 'indexed' - for indexed arrays
-	   - 'variable' - for set varables
-	   or: 'alias', 'keyword', 'function', 'builtin' or 'file'
-	   as reported by the 'type' builtin.
+	   - 'unset' for unset variables
+	   - 'associative' for associative arrays
+	   - 'indexed' for indexed arrays
+	   - 'scalar' for set varables
+	   - 'alias', 'keyword', 'function', 'builtin' or 'file'
 
 	OPTIONS:
-	   -t, --type        Return type as a single word.
+	   -b, --brief       Return type as a single word.
 	   -h, --help        Show program help.
 	   -u, --usage       Show program usage.
 	   -v, --version     Show program version.
 
 	EXAMPLES:
-	   $bbapp -t BASH_ALIASES
+	   $bbapp -b BASH_ALIASES
 	   $bbapp BASH_VERSINFO
-	   $bbapp PATH SHELLOPTS BASHOPTS LS_COLORS
 	EOFF
 	return 0
  }
@@ -131,234 +129,230 @@ typeof() {
 #                                                                  OPTIONS
 #=========================================================================
  local bbIn=""       # input parameter
- local bbQuiet=0     # output verbosity: 0=verbose, 1=single word
+ local bbBrief=0     # output verbosity: 0=verbose, 1=single word
 
  # parse input args
  while (($# > 0)); do
   case $1 in
-    -t|--type) bbQuiet=1; shift;;
-            *) bbIn="$1"; shift;;
+    -b|--brief) bbBrief=1; shift;;
+             *) bbIn="$1"; shift;;
   esac
  done
 
- # default format for printf
- bbDim=" \e[2m%s\e[0m %s\n"
- bbDim1="\e[2m%s\e[0m\n"
+ # formats for printf
+ local bbDim=" \e[2m%s\e[0m %s\n"
+ local bbDim1="\e[2m%s\e[0m\n"
+ local dim="\e[2m%s\e[0m"
 
+ # get nr. of terminal columns
+ local -i bbCols=${COLUMNS:-$(tput cols)}
+ ((bbCols <= 1)) && bbCols=80
 
-#                                                                 ALL VARS
+ unset XTYPEOF
+
+#                                                                PRINT ALL
 #=========================================================================
- # If no arg supplied print all variables
+ # If no arg supplied print all variables and functions
  if [[ -z $bbIn ]]; then
   printf "$bbDim1" "Variables:"
-  compgen -v | column -c $(tput cols)
-  printf "$bbDim1" "Functions:"
-  compgen -A function | column -c $(tput cols)
+  compgen -v | column -c $bbCols
+  printf "\n$bbDim1" "Functions:"
+  compgen -A function | grep -v _ | column -c $bbCols
+  printf "\n$bbDim1" "All functions:"
+  compgen -A function | column -c $bbCols
   return 0
  fi
 
-
-#                                                             TYPE BUILTIN
+#                                                                     VARS
 #=========================================================================
-# First, check arg with `type` - it can qualify a NAME as:
-# 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
-local bbDeclare="$(type -t "$bbIn" 2>/dev/null)"
+ # First, check if name is a variable name, i.e. in symbols table
+ if bbDeclare="$(declare -p "$bbIn" 2>/dev/null)"; then
+    # NAME is var: scalar, indexed or assoc. array
 
-if [[ -n "$bbDeclare" ]]; then
-    if (( bbQuiet == 1 ))
-    then
-      # if `-t or --type` is used, print the findings as a single word:
-      # 1) keyword, 2) builtin, 3) alias, 4) function, 5) file.
-      printf "%s\n" "$bbDeclare"
-    else
-      # oterwise, print more verbose, and styled, results
-      printf "$bbDim" "Name:" "$bbIn"
-      printf "$bbDim" "Type:" "$bbDeclare"
+    # parse its declare statement
+    bbDeclare=($bbDeclare)
 
-      #                                                   FUNCTION
-      #-----------------------------------------------------------
-      # In case it's a function, get the path used to source it -
-      # that can be done by turning on bash's extended_debug mode.
-      if [[ $bbDeclare == "function" ]]; then
-        shopt -s extdebug
-        local fPath="$(declare -F "$bbIn")"
-        fPath=( $fPath )
-        printf "$bbDim" "From:" "${fPath[2]} (line: ${fPath[1]})"
-        shopt -u extdebug
-      fi
+    # Check its attributes:
+    #  - type: scalar (-) OR indexed (a) OR assoc. array (A).
+    #  - casing: uppercase, lowercase, title-case.
+    #  - other: integer, ref, export, readonly, trace.
+  case ${bbDeclare[1]} in
 
-      #                                                       FILE
-      #-----------------------------------------------------------
-      # In case it's a file, get its path
-      if [[ $bbDeclare == "file" ]]; then
-        local fPath="$(which -a "$bbIn")"
-        fPath=${fPath//$'\n'/:}
-        printf "$bbDim" "Path:" "$fPath"
-        declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
-      fi
 
-      #                                                    BUILTIN
-      #-----------------------------------------------------------
-      # If running interactively, display all builtins, hilite this one
-      if [[ $bbDeclare == "builtin" ]] && [[ $- =~ i ]]; then
-        printf " \e[2m%s\e[0m" "Builtins: "
-        compgen -b | tr '\n' ' ' | grep -E "\b$bbIn\b"
-      fi
-
-    fi
-
-else
-  #                                                              UNSET VAR
+  #                                                          INDEXED ARRAY
   #=======================================================================
-  # In order to assume the NAME is a variable (whether set or not),
-  # first check if NAME is a valid shell identifier. If `set -o nounset'
-  # is not enabled, all non-set variables are in fact treated as undefined
-  # variables when referenced - variables with null value. Of course, they
-  # are not in symbols table, so check there to identify them.
-  # Return `unset' if they are not in in symbols table.
+    *a*)
+        if ((bbBrief));then
+          # brief output
+          printf "%s\n" "indexed"
+        else
+          # verbose output
+          local bbKey bbK bbCurr bbMax=0
+          local -n bbArrayRef="$bbIn"
+          local -i bbNum=1
 
-  # Assign `decalare -p NAME' to bbDeclare,
-  # If assignment is empty then NAME is unset/nothing.
-  if ! bbDeclare="$(declare -p "$bbIn" 2>/dev/null)"; then
-    if (( bbQuiet == 1 )); then
-      printf "%s\n" "unset"
-    else
-      printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
-      printf " \e[2m%s\e[0m %s\n" "Type:" "unset"
+          # max chars
+          for bbKey in "${!bbArrayRef[@]}"; do
+            bbCurr=${#bbArrayRef[$bbKey]}
+            bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
+          done
+
+          # OUTPUT
+          printf " $dim %s\n" "Name:" "$bbIn"
+          printf " $dim " "Type:"
+          printf "indexed array [%s]\n" "${#bbArrayRef[@]}"
+
+          # title
+          printf "\e[2m%s. %7s %-*s %5s\e[0m\n" \
+                " no" "key " $bbMax "value" "len"
+
+          # value
+          for bbK in "${!bbArrayRef[@]}"; do
+            printf "\e[2m%2d.\e[0m %7s: %-*s \e[2m%5s\e[0m\n" \
+                  "${bbNum}" "[${bbK}]" $bbMax \
+                  "${bbArrayRef[$bbK]}" "${#bbArrayRef[$bbK]}"
+            (( ++bbNum ))
+          done
+          printf "\n"
+        fi
+    ;;&
+
+  #                                                      ASSOCIATIVE ARRAY
+  #=======================================================================
+    *A*) # brief output:
+        if ((bbBrief));then
+          printf "%s\n" "associative"
+        else
+          # verbose output:
+          local -n bbArrayRef="$bbIn"
+          local -i bbNum=1
+          local bbKey bbCurr bbMax=0 bbCurrKey bbMaxK=0
+
+          # max chars: value and kay
+          for bbKey in "${!bbArrayRef[@]}"; do
+            bbCurr=${#bbArrayRef[$bbKey]}
+            bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
+            bbCurrKey=${#bbKey}
+            bbMaxK=$(( bbCurrKey > bbMaxK ? bbCurrKey : bbMaxK ))
+          done
+          (( bbMaxK += 2 ))
+
+          printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
+          printf " \e[2m%s\e[0m " "Type:"
+          printf "associative array %s\n" "[${#bbArrayRef[@]}]"
+
+          # title
+          printf "\e[2m%s. %*s %-*s %5s\e[0m\n" \
+            " no" $bbMaxK "key " $bbMax "value" "len"
+
+          # value
+          local bbK
+          for bbK in "${!bbArrayRef[@]}"; do
+            printf "\e[2m%2d.\e[0m %*s: %-*s \e[2m%5s\e[0m\n" \
+            "${bbNum}" $bbMaxK "[$bbK]" $bbMax \
+            "${bbArrayRef[$bbK]}" "${#bbArrayRef[$bbK]}"
+            (( ++bbNum ))
+          done
+          printf "\n"
+        fi
+    ;;&
+
+  #                                                                 SCALAR
+  #=======================================================================
+    # if 1. attribute is dash (-), var is scalar
+    -[-linuxcrt]*)
+        # if --brief, output single word type
+        if ((bbBrief));then
+          printf "%s\n" "scalar"
+        else
+          # otherwise output name, type and value
+          local bbValue="${!bbIn}"
+          printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
+
+          if [[ $bbValue =~ : ]]; then
+            printf " \e[2m%s\e[0m %s\n" "Type:"  "scalar (colon separated values)"
+            printf "\e[2m%s\e[0m\n" "Value:"
+            printf "       %s\n" ${bbValue//:/$'\n'}
+          else
+            printf " \e[2m%s\e[0m %s\n" "Type:" "scalar"
+            printf "\e[2mValue:\e[0m %s \e[2m[%s]\e[0m\n" "$bbValue" "${#bbValue}"
+          fi
+        fi
+    ;;&
+
+  #                                                             ATTRIBUTES
+  #=======================================================================
+    *[linuxcrt]*) printf "\e[2m%s\e[0m\n" " Attr:";;&
+    *i*) printf '    %s\n' "-i (integer)"        ;;&
+    *r*) printf '    %s\n' "-r (readonly)"       ;;&
+    *x*) printf '    %s\n' "-x (export)"         ;;&
+    *l*) printf '    %s\n' "-l (lowercasing)"    ;;&
+    *c*) printf '    %s\n' "-c (capitalizing)" ;;&
+    *u*) printf '    %s\n' "-u (uppercasing)"  ;;&
+    *n*) printf '    %s\n' "-n (reference)"    ;;&
+    *t*) printf '    %s\n' "-t (trace)"        ;;&
+    *[linuxcrt]*) printf "\n";;
+
+ esac
+ echo
+ return 0
+
+#                                                                      SHELL
+#===========================================================================
+else
+    # if not var, check with 'type'
+    local bbDeclare="$(type -b "$bbIn" 2>/dev/null)"
+
+    if [[ -n "$bbDeclare" ]]; then
+      if ((bbBrief)); then
+        printf "%s\n" "$bbDeclare"
+        return 0
+      else
+        # oterwise, print more verbose, and styled, results
+        printf "$bbDim" "Name:" "$bbIn"
+        printf "$bbDim" "Type:" "$bbDeclare"
+
+        #                                                   FUNCTION
+        #-----------------------------------------------------------
+        # In case it's a function, get the path used to source it -
+        # that can be done by turning on bash's extended_debug mode.
+        if [[ $bbDeclare == "function" ]]; then
+          shopt -s extdebug
+          local fPath="$(declare -F "$bbIn")"
+          fPath=( $fPath )
+          printf "$bbDim" "From:" "${fPath[2]} (line: ${fPath[1]})"
+          shopt -u extdebug
+        fi
+
+        #                                                       FILE
+        #-----------------------------------------------------------
+        # In case it's a file, get its path
+        if [[ $bbDeclare == "file" ]]; then
+          local fPath="$(which -a "$bbIn")"
+          fPath=${fPath//$'\n'/:}
+          printf "$bbDim" "Path:" "$fPath"
+          declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
+        fi
+
+        #                                                    BUILTIN
+        #-----------------------------------------------------------
+        # If running interactively, display all builtins, hilite this one
+        if [[ $bbDeclare == "builtin" ]] && [[ $- =~ i ]]; then
+          printf " \e[2m%s\e[0m" "Builtins: "
+          compgen -b | tr '\n' ' ' | grep -E "\b$bbIn\b"
+        fi
+
+        return 0
+      fi
     fi
-  fi
 
 fi
-
-#                                                                VARIABLES
-#=========================================================================
-# At this point NAME is set (but might be null) variable:
-# whether scalar or array, it is in symbols table nonetheless.
-bbDeclare=( $bbDeclare )
-
-## Scrutinize attributes. Possible attributes:
-#  a) var type attributes (-aA): scalar (-) OR indexed (a) OR assoc. array (A).
-#  b) letter-casing attributes (ulc): uppercase, lowercase, title-case.
-#  c) other attributes (inxrt): integer, ref, export, readonly, trace.
-
-# get nr. of terminal columns
-local -i bbCols=${COLUMNS:-$(tput cols)}
-((bbCols <= 1)) && bbCols=80
-
-
-case ${bbDeclare[1]} in
-#                                                            INDEXED ARRAY
-#=========================================================================
- *a*)
-  (( bbQuiet <= 1 )) && { printf "%s\n" "indexed"; continue; }
-
-  local bbKey bbCurr
-  local -n bbArrayRef="$bbIn"
-  local -i bbNum=1
-  local bbMax=0
-
-  # max chars
-  for bbKey in "${!bbArrayRef[@]}"; do
-    bbCurr=${#bbArrayRef[$bbKey]}
-    bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
-  done
-
-  printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
-  printf " \e[2m%s\e[0m " "Type:"
-  printf "indexed array [%s]\n" "${#bbArrayRef[@]}"
-
-  # title
-  printf "\e[2m%s. %7s %-*s %5s\e[0m\n" \
-  " no" "key " $bbMax "value" "len"
-
-  # value
-  local bbK
-  for bbK in "${!bbArrayRef[@]}"; do
-    printf "\e[2m%2d.\e[0m %7s: %-*s \e[2m%5s\e[0m\n" \
-    "${bbNum}" "[${bbK}]" $bbMax \
-    "${bbArrayRef[$bbK]}" "${#bbArrayRef[$bbK]}"
-    (( ++bbNum ))
-  done
-  printf "\n"
- ;;&
-
-#                                                        ASSOCIATIVE ARRAY
-#=========================================================================
- *A*)
-  (( bbQuiet == 1 )) && { printf "%s\n" "associative"; continue; }
-
-  local -n bbArrayRef="$bbIn"
-  local -i bbNum=1
-  local bbKey bbCurr bbMax=0 bbCurrKey bbMaxK=0
-
-  # max chars: value and kay
-  for bbKey in "${!bbArrayRef[@]}"; do
-    bbCurr=${#bbArrayRef[$bbKey]}
-    bbMax=$(( bbCurr > bbMax ? bbCurr : bbMax ))
-    bbCurrKey=${#bbKey}
-    bbMaxK=$(( bbCurrKey > bbMaxK ? bbCurrKey : bbMaxK ))
-  done
-  (( bbMaxK += 2 ))
-
-  printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
-  printf " \e[2m%s\e[0m " "Type:"
-  printf "associative array %s\n" "[${#bbArrayRef[@]}]"
-
-  # title
-  printf "\e[2m%s. %*s %-*s %5s\e[0m\n" \
-    " no" $bbMaxK "key " $bbMax "value" "len"
-
-  # value
-  local bbK
-  for bbK in "${!bbArrayRef[@]}"; do
-    printf "\e[2m%2d.\e[0m %*s: %-*s \e[2m%5s\e[0m\n" \
-    "${bbNum}" $bbMaxK "[$bbK]" $bbMax \
-    "${bbArrayRef[$bbK]}" "${#bbArrayRef[$bbK]}"
-    (( ++bbNum ))
-  done
-  printf "\n"
- ;;&
-
-#                                                                  SCALARS
-#=========================================================================
-# if 1. attribute was (-) than var is scalar
- -[-linuxcrt]*)
-    # if --type, output single word type
-    (( bbQuiet == 1 )) && { printf "%s\n" "scalar"; continue; }
-
-    # otherwise output name, type and value
-    local bbValue="${!bbIn}"
-      printf " \e[2m%s\e[0m %s\n" "Name:" "$bbIn"
-    if [[ $bbValue =~ : ]]; then
-      printf " \e[2m%s\e[0m %s\n" "Type:"  "scalar (colon separated values)"
-      printf "\e[2m%s\e[0m\n" "Value:"
-      printf "       %s\n" ${bbValue//:/$'\n'}
-    else
-      printf " \e[2m%s\e[0m %s\n" "Type:" "scalar"
-      printf "\e[2mValue:\e[0m %s \e[2m[%s]\e[0m\n" "$bbValue" "${#bbValue}"
-    fi
- ;;&
-
-#                                                               ATTRIBUTES
-#=========================================================================
-# remaining attributes
- *[linuxcrt]*) printf "\e[2m%s\e[0m\n" " Attr:";;&
-  *i*) printf '    %s\n' "-i (integer)"        ;;&
-  *r*) printf '    %s\n' "-r (readonly)"       ;;&
-  *x*) printf '    %s\n' "-x (export)"         ;;&
-  *l*) printf '    %s\n' "-l (lowercasing)"    ;;&
-  *c*) printf '    %s\n' "-c (capitalizing)" ;;&
-  *u*) printf '    %s\n' "-u (uppercasing)"  ;;&
-  *n*) printf '    %s\n' "-n (reference)"    ;;&
-  *t*) printf '    %s\n' "-t (trace)"        ;;&
-  *[linuxcrt]*) printf "\n";;
-esac
-printf "\n"
-
-# done # end opernads loop
-
-return 0
+# end: not var, not anything with type
+return 2
 } # end function
+
+
+
 
 
 if [[ "$0" == "$BASH_SOURCE" ]]; then
