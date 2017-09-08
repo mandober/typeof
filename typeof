@@ -130,6 +130,7 @@ typeof() {
 #=========================================================================
  local bbIn=""       # input parameter
  local bbBrief=0     # output verbosity: 0=verbose, 1=single word
+ local bbDeclare
 
  # parse input args
  while (($# > 0)); do
@@ -169,19 +170,19 @@ typeof() {
  if bbDeclare="$(declare -p "$bbIn" 2>/dev/null)"; then
     # NAME is var: scalar, indexed or assoc. array
 
-    # parse its declare statement
+    # get attrib part from declare statement, e.g: declare -xr VAR
+    # NOTE: In bash 4.4+. these atribs can be obtained: ${NAME@a}
     bbDeclare=($bbDeclare)
 
-    # Check its attributes:
-    #  - type: scalar (-) OR indexed (a) OR assoc. array (A).
-    #  - casing: uppercase, lowercase, title-case.
-    #  - other: integer, ref, export, readonly, trace.
-  case ${bbDeclare[1]} in
+    # Check attributes (-linuxAcart):
+    #  * type: scalar (-) OR indexed (a) OR assoc. array (A).
+    #  * casing: uppercase (u), lowercase (l), titlecase (c).
+    #  * other: integer (i), ref (n), export (x), readonly (r), trace (t).
+   case ${bbDeclare[1]} in
 
-
-  #                                                          INDEXED ARRAY
-  #=======================================================================
-    *a*)
+    #                                                        INDEXED ARRAY
+    #=====================================================================
+     *a*)
         if ((bbBrief));then
           # brief output
           printf "%s\n" "indexed"
@@ -215,11 +216,11 @@ typeof() {
           done
           printf "\n"
         fi
-    ;;&
+     ;;&
 
-  #                                                      ASSOCIATIVE ARRAY
-  #=======================================================================
-    *A*) # brief output:
+    #                                                    ASSOCIATIVE ARRAY
+    #=====================================================================
+     *A*) # brief output:
         if ((bbBrief));then
           printf "%s\n" "associative"
         else
@@ -255,12 +256,12 @@ typeof() {
           done
           printf "\n"
         fi
-    ;;&
+     ;;&
 
-  #                                                                 SCALAR
-  #=======================================================================
-    # if 1. attribute is dash (-), var is scalar
-    -[-linuxcrt]*)
+    #                                                               SCALAR
+    #=====================================================================
+     # if 1. attribute is dash (-), var is scalar
+     -[-linuxcrt]*)
         # if --brief, output single word type
         if ((bbBrief));then
           printf "%s\n" "scalar"
@@ -278,42 +279,42 @@ typeof() {
             printf "\e[2mValue:\e[0m %s \e[2m[%s]\e[0m\n" "$bbValue" "${#bbValue}"
           fi
         fi
-    ;;&
+     ;;&
 
-  #                                                             ATTRIBUTES
-  #=======================================================================
-    *[linuxcrt]*) printf "\e[2m%s\e[0m\n" " Attr:";;&
-    *i*) printf '    %s\n' "-i (integer)"        ;;&
-    *r*) printf '    %s\n' "-r (readonly)"       ;;&
-    *x*) printf '    %s\n' "-x (export)"         ;;&
-    *l*) printf '    %s\n' "-l (lowercasing)"    ;;&
-    *c*) printf '    %s\n' "-c (capitalizing)" ;;&
-    *u*) printf '    %s\n' "-u (uppercasing)"  ;;&
-    *n*) printf '    %s\n' "-n (reference)"    ;;&
-    *t*) printf '    %s\n' "-t (trace)"        ;;&
-    *[linuxcrt]*) printf "\n";;
+    #                                                           ATTRIBUTES
+    #=====================================================================
+     *[linuxcrt]*) printf "$dim\n" " Attr:";;&
+      *i*) printf '    %s\n' "-i (integer)"      ;;&
+      *r*) printf '    %s\n' "-r (readonly)"     ;;&
+      *x*) printf '    %s\n' "-x (export)"       ;;&
+      *l*) printf '    %s\n' "-l (lowercasing)"  ;;&
+      *c*) printf '    %s\n' "-c (capitalizing)" ;;&
+      *u*) printf '    %s\n' "-u (uppercasing)"  ;;&
+      *n*) printf '    %s\n' "-n (reference)"    ;;&
+      *t*) printf '    %s\n' "-t (trace)"        ;;&
+     *[linuxcrt]*) printf "\n";;
 
- esac
- echo
- return 0
+   esac
+   echo
+   return 0
 
-#                                                                      SHELL
-#===========================================================================
-else
+#                                                                    SHELL
+#=========================================================================
+ else
     # if not var, check with 'type'
-    local bbDeclare="$(type -b "$bbIn" 2>/dev/null)"
-
-    if [[ -n "$bbDeclare" ]]; then
+    if bbDeclare="$(type -t "$bbIn" 2>/dev/null)"; then
+      # brief output
       if ((bbBrief)); then
         printf "%s\n" "$bbDeclare"
         return 0
+      # verbose output
       else
         # oterwise, print more verbose, and styled, results
         printf "$bbDim" "Name:" "$bbIn"
         printf "$bbDim" "Type:" "$bbDeclare"
 
-        #                                                   FUNCTION
-        #-----------------------------------------------------------
+       #                                                          FUNCTION
+       #==================================================================
         # In case it's a function, get the path used to source it -
         # that can be done by turning on bash's extended_debug mode.
         if [[ $bbDeclare == "function" ]]; then
@@ -322,36 +323,30 @@ else
           fPath=( $fPath )
           printf "$bbDim" "From:" "${fPath[2]} (line: ${fPath[1]})"
           shopt -u extdebug
+          return 0
         fi
 
-        #                                                       FILE
-        #-----------------------------------------------------------
+       #                                                              FILE
+       #==================================================================
         # In case it's a file, get its path
         if [[ $bbDeclare == "file" ]]; then
           local fPath="$(which -a "$bbIn")"
           fPath=${fPath//$'\n'/:}
           printf "$bbDim" "Path:" "$fPath"
           declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
-        fi
-
-        #                                                    BUILTIN
-        #-----------------------------------------------------------
-        # If running interactively, display all builtins, hilite this one
-        if [[ $bbDeclare == "builtin" ]] && [[ $- =~ i ]]; then
-          printf " \e[2m%s\e[0m" "Builtins: "
-          compgen -b | tr '\n' ' ' | grep -E "\b$bbIn\b"
+          return 0
         fi
 
         return 0
       fi
     fi
 
-fi
-# end: not var, not anything with type
+ fi
+ # end: not var, not anything with type
+
+# NAME is not anything, return status 2
 return 2
 } # end function
-
-
 
 
 
