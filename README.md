@@ -11,8 +11,7 @@ Type NAME as indexed array, associative array or variable. Dump indexed and asso
 
 
 ## OPTIONS
-With `-b` option, only the type, as a single string, is returned. 
-Returned types:  
+Without `-b` option, output is more verbose and variable contents are also dumped. With `-b` option, only the type, as a single string, is returned. Returned types:
 - `scalar`
 - `indexed` (indexed array)
 - `associative` (associative array)
@@ -20,17 +19,15 @@ Returned types:
 - `keyword`
 - `function`
 - `builtin`
-- `file`
-Without the `-b` option, output is more verbose and variable contents are also dumped.
-
+- `file`    
 
 ## PARAMETER
 Parameter NAME can be anything: variable's name, identifier, shell keyword, 
 
 
 ## RETURN STATUS
-0  great success
-1  miserable failure
+0  success
+1  failure
 2  NAME is not anything significant
 
 
