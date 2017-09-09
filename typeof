@@ -3,10 +3,10 @@
 #-------------------------------------------------------------------------
 #    FILE: typeof
 #    TYPE: bash function
-#  AUTHOR: Ivan Ilic <ivanilic1975@gmail.com>
 #     WEB: https://github.com/mandober/typeof
+#  AUTHOR: Ilic Ivan <ilicivan@zoho.com>
 # LICENSE: MIT
-#    DATE: 02-Sep-2017 (last revision)
+#    DATE: 09-Sep-2017 (last revision)
 #                                                                  DETAILS
 #-------------------------------------------------------------------------
 #  NAME:
@@ -75,7 +75,7 @@ typeof() {
 #                                                                    ABOUT
 #-------------------------------------------------------------------------
  local bbapp="${FUNCNAME[0]}"
- local bbnfo="$bbapp v.0.1.11"
+ local bbnfo="$bbapp v.0.1.12"
  local usage="USAGE: $bbapp [-b] NAME ..."
 
 #                                                                     HELP
@@ -330,7 +330,9 @@ typeof() {
           return 0
         fi
 
+      return 0
       fi
+
     fi
 
  fi

@@ -11,7 +11,8 @@ Type NAME as indexed array, associative array or variable. Dump indexed and asso
 
 
 ## OPTIONS
-Without `-b` option, output is more verbose and variable contents are also dumped. With `-b` option, only the type, as a single string, is returned. Returned types:
+`-b, --brief`    
+only the type, as a single string, is returned. Returned types:
 - `scalar`
 - `indexed` (indexed array)
 - `associative` (associative array)
@@ -20,9 +21,21 @@ Without `-b` option, output is more verbose and variable contents are also dumpe
 - `function`
 - `builtin`
 - `file`    
+Without this option, output is more verbose.   
 
-## PARAMETER
+
+## OPERANDS
+`NAME`
 Parameter NAME can be anything: variable's name, identifier, shell keyword, 
+
+
+## STDOUT
+Print results.    
+Help, usage, version (to STOUT only if explicitly requested).
+
+
+## STDERR
+Error messages, help and usage.
 
 
 ## RETURN STATUS
@@ -69,3 +82,18 @@ $ typeof UID
        -i (integer)
        -r (readonly)
 ````
+
+
+## SEE ALSO
+[barf](https://github.com/mandober/barf) - bash array-related functions.
+
+
+### ID TAG
+```
+   FILE: typeof
+   TYPE: bash function
+    WEB: https://github.com/mandober/typeof
+ AUTHOR: Ilic Ivan <ilicivan@zoho.com>
+LICENSE: MIT
+   DATE: 09-Sep-2017 (last revision)
+```
