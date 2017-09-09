@@ -4,7 +4,7 @@
 #    FILE: typeof
 #    TYPE: bash function
 #  AUTHOR: Ivan Ilic <ivanilic1975@gmail.com>
-#     WEB: https://github.com/mandober/bing-bash
+#     WEB: https://github.com/mandober/typeof
 # LICENSE: MIT
 #    DATE: 02-Sep-2017 (last revision)
 #                                                                  DETAILS
@@ -46,12 +46,7 @@
 #       Error messages, help and usage.
 #
 #  ENVIRONMENT:
-#       XTYPEOF variable will be set in the environment; it is associative
-#       array containg results of this function. It will have a "name" key
-#       containg supplied NAME, "type" key that will contain the recognized
-#       type; if type is 'file' or 'function', there will also be a "path"
-#       key, which in might contain one or more, colon-separated paths, to
-#       that particular file or function.
+#       -
 #
 #  RETURN CODE:
 #       0  success
@@ -148,8 +143,6 @@ typeof() {
  # get nr. of terminal columns
  local -i bbCols=${COLUMNS:-$(tput cols)}
  ((bbCols <= 1)) && bbCols=80
-
- unset XTYPEOF
 
 #                                                                PRINT ALL
 #=========================================================================
@@ -333,11 +326,10 @@ typeof() {
           local fPath="$(which -a "$bbIn")"
           fPath=${fPath//$'\n'/:}
           printf "$bbDim" "Path:" "$fPath"
-          declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
+          # declare -Ag XTYPEOF=( [name]="$bbIn" [type]="$bbDeclare" [path]="$fPath" )
           return 0
         fi
 
-        return 0
       fi
     fi
 
@@ -352,13 +344,11 @@ return 2
 
 if [[ "$0" == "$BASH_SOURCE" ]]; then
   # if this file is executed
-  echo "typeof executed"
+  echo "[typeof] executed!"
   typeof "$@"
 else
   # if this file is sourced
-  echo "typeof sourced"
-  # alias
-  alias t=typeof
+  echo "[typeof] sourced!"
 fi
 
 # bash completions: complete with variable names (-v)
